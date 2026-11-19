@@ -36,6 +36,54 @@ class ShapeRulesTest {
     }
 
     @Test
+    void singleInstanceLeavesOutClassesNoEnumCanReplace() {
+        List<String> violations = new Fixtures()
+                .main("""
+                        package dev.example.internal.glow;
+
+                        public class Light { }
+                        """, """
+                        package dev.example.internal.glow;
+
+                        public final class Lamp extends Light {
+
+                            public static final Lamp INSTANCE = new Lamp();
+                        }
+                        """, """
+                        package dev.example.internal.glow;
+
+                        public final class Beam<VALUE> {
+
+                            public static final Beam<?> INSTANCE = new Beam<>();
+                        }
+                        """)
+                .violationsOf(ShapeRules.SINGLE_INSTANCE_IS_ENUM);
+
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
+    void noEmptyRecordsLeavesOutCasesOfSealedInterfaces() {
+        List<String> violations = new Fixtures()
+                .main("""
+                        package dev.example.internal.verdict;
+
+                        public sealed interface Verdict permits Allowed, Denied { }
+                        """, """
+                        package dev.example.internal.verdict;
+
+                        public record Allowed() implements Verdict { }
+                        """, """
+                        package dev.example.internal.verdict;
+
+                        public record Denied(String reason) implements Verdict { }
+                        """)
+                .violationsOf(ShapeRules.NO_EMPTY_RECORDS);
+
+        assertThat(violations).isEmpty();
+    }
+
+    @Test
     void noEmptyRecords() {
         List<String> violations = new Fixtures()
                 .main("""

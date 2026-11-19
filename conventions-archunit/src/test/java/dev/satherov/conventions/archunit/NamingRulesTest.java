@@ -124,4 +124,32 @@ class NamingRulesTest {
                 .hasSize(1)
                 .allMatch(violation -> violation.contains("MockUser"));
     }
+
+    @Test
+    void namingRulesLeaveOutGeneratedClasses() {
+        Fixtures fixtures = new Fixtures()
+                .main("""
+                        package dev.example.internal.wire;
+
+                        import java.lang.annotation.Retention;
+                        import java.lang.annotation.RetentionPolicy;
+
+                        @Retention(RetentionPolicy.CLASS)
+                        public @interface Generated { }
+                        """, """
+                        package dev.example.internal.wire;
+
+                        @Generated
+                        public class NewMemberActionWire { }
+                        """, """
+                        package dev.example.internal.wire;
+
+                        @javax.annotation.processing.Generated("generator")
+                        public class NewInviteWire { }
+                        """);
+
+        assertThat(fixtures.violationsOf(NamingRules.NO_VERSION_NAMES))
+                .hasSize(1)
+                .allMatch(violation -> violation.contains("NewInviteWire"));
+    }
 }

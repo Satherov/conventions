@@ -24,6 +24,11 @@ public class Code {
     private static final ImportOption NOT_TESTS = new ImportOption.DoNotIncludeTests();
 
     ///
+    /// The simple name of the annotations that mark a class as generated.
+    ///
+    private static final String GENERATED = "Generated";
+
+    ///
     /// The classes of main code.
     ///
     public static final DescribedPredicate<JavaClass> MAIN = DescribedPredicate.describe("are main code", Code::isMain);
@@ -32,6 +37,12 @@ public class Code {
     /// The classes of test code.
     ///
     public static final DescribedPredicate<JavaClass> TEST = DescribedPredicate.describe("are test code", Code::isTest);
+
+    ///
+    /// The classes written by hand: every class not marked with an annotation named `Generated` that the class file
+    /// keeps.
+    ///
+    public static final DescribedPredicate<JavaClass> WRITTEN = DescribedPredicate.describe("are written by hand", Code::isWritten);
 
     ///
     /// Checks if the given class was compiled from main sources.
@@ -49,6 +60,15 @@ public class Code {
         return Code.locationOf(type)
                 .map(location -> !Code.NOT_TESTS.includes(location))
                 .orElse(false);
+    }
+
+    ///
+    /// Checks if the given class carries no annotation named `Generated`.
+    ///
+    private static boolean isWritten(JavaClass type) {
+        return type.getAnnotations()
+                .stream()
+                .noneMatch(annotation -> annotation.getRawType().getSimpleName().equals(Code.GENERATED));
     }
 
     ///
