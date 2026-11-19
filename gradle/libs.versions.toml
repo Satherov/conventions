@@ -1,0 +1,20 @@
+[versions]
+jspecify = "1.0.0"
+error-prone = "2.47.0"
+archunit = "1.4.1"
+lombok = "1.18.42"
+jetbrains-annotations = "26.0.2"
+junit = "5.14.4"
+assertj = "3.27.7"
+
+[libraries]
+jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
+error-prone-annotations = { module = "com.google.errorprone:error_prone_annotations", version.ref = "error-prone" }
+archunit = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
+jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref = "jetbrains-annotations" }
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
