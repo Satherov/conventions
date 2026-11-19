@@ -2,7 +2,11 @@ package dev.satherov.conventions.javac.source;
 
 import lombok.RequiredArgsConstructor;
 
+import com.sun.source.tree.ClassTree;
+import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.ModifiersTree;
 import com.sun.source.tree.Tree;
+import com.sun.source.util.TreePath;
 import com.sun.source.util.TreeScanner;
 import com.sun.source.util.Trees;
 
@@ -16,6 +20,8 @@ import javax.tools.Diagnostic;
 /// The breaches the rules found, held until the compilation ends and then reported as errors.
 ///
 /// An error stops javac before it checks types, so reporting early would hide every finding of the type-aware rules.
+/// A finding is dropped when the tree it points at, or a method, constructor, or type around it, carries
+/// `@SuppressWarnings("conventions:<id>")` with the id of its rule.
 ///
 @RequiredArgsConstructor
 public final class Findings {
@@ -24,6 +30,16 @@ public final class Findings {
     /// The prefix of every message, which holds the plugin name and then the rule id.
     ///
     public static final String PREFIX = "[conventions:";
+
+    ///
+    /// The prefix of a `@SuppressWarnings` key that suppresses a rule, followed by the rule's id.
+    ///
+    private static final String SUPPRESSION = "conventions:";
+
+    ///
+    /// The simple name of the annotation that suppresses a rule.
+    ///
+    private static final String SUPPRESS_WARNINGS = "SuppressWarnings";
 
     ///
     /// The javac trees the messages are reported through.
@@ -44,7 +60,9 @@ public final class Findings {
     /// @param message What is wrong and what the rule wants instead.
     ///
     public void report(String rule, SourceFile file, Tree tree, String message) {
-        this.pending.add(new Finding(rule, file, tree, message));
+        if (!this.isSuppressed(rule, file, tree)) {
+            this.pending.add(new Finding(rule, file, tree, message));
+        }
     }
 
     ///
@@ -57,7 +75,9 @@ public final class Findings {
     ///
     public void report(String rule, SourceFile file, Line line, String message) {
         Tree holder = Findings.holderOf(file, line.start());
-        this.pending.add(new Finding(rule, file, holder, "line " + line.number() + ": " + message));
+        if (!this.isSuppressed(rule, file, holder)) {
+            this.pending.add(new Finding(rule, file, holder, "line " + line.number() + ": " + message));
+        }
     }
 
     ///
@@ -97,6 +117,38 @@ public final class Findings {
         }
 
         this.pending.clear();
+    }
+
+    ///
+    /// Checks if the given tree, or a method or type around it, suppresses the given rule.
+    ///
+    /// This runs when the finding is reported, since javac rewrites the trees of a class once it has analyzed it.
+    ///
+    private boolean isSuppressed(String rule, SourceFile file, Tree tree) {
+        String key = Findings.SUPPRESSION + rule;
+        for (TreePath path = this.trees.getPath(file.unit(), tree); path != null; path = path.getParentPath()) {
+            ModifiersTree modifiers = switch (path.getLeaf()) {
+                case MethodTree method -> method.getModifiers();
+                case ClassTree type -> type.getModifiers();
+                default -> null;
+            };
+            if (modifiers != null && Findings.suppresses(modifiers, key)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    ///
+    /// Checks if a `@SuppressWarnings` among the given modifiers holds the given key.
+    ///
+    private static boolean suppresses(ModifiersTree modifiers, String key) {
+        return Annotations.find(modifiers, Findings.SUPPRESS_WARNINGS)
+                .map(Annotations::getAllStringsOf)
+                .orElse(List.of())
+                .stream()
+                .anyMatch(value -> key.equals(value.getValue()));
     }
 
     ///

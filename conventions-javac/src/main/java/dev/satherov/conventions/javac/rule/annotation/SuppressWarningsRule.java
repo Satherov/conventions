@@ -1,5 +1,7 @@
 package dev.satherov.conventions.javac.rule.annotation;
 
+import lombok.RequiredArgsConstructor;
+
 import dev.satherov.conventions.javac.rule.Phase;
 import dev.satherov.conventions.javac.rule.Rule;
 import dev.satherov.conventions.javac.source.Annotations;
@@ -7,30 +9,26 @@ import dev.satherov.conventions.javac.source.Findings;
 import dev.satherov.conventions.javac.source.SourceFile;
 
 import com.sun.source.tree.AnnotationTree;
-import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.ClassTree;
-import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.LiteralTree;
 import com.sun.source.tree.MethodTree;
-import com.sun.source.tree.NewArrayTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.TreePathScanner;
 
-import org.jetbrains.annotations.Unmodifiable;
 import org.jspecify.annotations.Nullable;
 
-import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
 ///
-/// The rule that `@SuppressWarnings` sits on a type, a method, or a constructor and names javac lint keys or IntelliJ
-/// inspection ids.
+/// The rule that `@SuppressWarnings` sits on a type, a method, or a constructor and names javac lint keys, IntelliJ
+/// inspection ids, or `conventions:<id>` keys of the plugin's own rules.
 ///
 /// A finding on a field, a parameter, a record component, or a local is suppressed on the enclosing method or type. An
 /// IntelliJ finding inside a body may also be silenced on its statement with a `//noinspection <id> <reason>` line.
 ///
+@RequiredArgsConstructor
 public class SuppressWarningsRule implements Rule {
 
     ///
@@ -86,7 +84,17 @@ public class SuppressWarningsRule implements Rule {
     ///
     /// The pattern of an IntelliJ inspection id.
     ///
-    private static final Pattern INSPECTION = Pattern.compile("[A-Z][A-Za-z0-9]*");
+    private static final Pattern INSPECTION = Pattern.compile("[A-Za-z][A-Za-z0-9]*");
+
+    ///
+    /// The prefix of a key that suppresses a rule of the plugin, followed by the rule's id.
+    ///
+    public static final String CONVENTIONS = "conventions:";
+
+    ///
+    /// The ids of every rule of the plugin.
+    ///
+    private final Set<String> ids;
 
     ///
     /// The id [#ID].
@@ -127,13 +135,8 @@ public class SuppressWarningsRule implements Rule {
                     findings.report(SuppressWarningsRule.ID, file, annotation, "@SuppressWarnings goes on the enclosing method or type");
                 }
 
-                for (ExpressionTree argument : annotation.getArguments()) {
-                    for (LiteralTree value : SuppressWarningsRule.valuesOf(argument)) {
-                        String key = String.valueOf(value.getValue());
-                        if (!SuppressWarningsRule.LINT_KEYS.contains(key) && !SuppressWarningsRule.INSPECTION.matcher(key).matches()) {
-                            findings.report(SuppressWarningsRule.ID, file, value, key + " is neither a javac lint key nor an IntelliJ inspection id");
-                        }
-                    }
+                for (LiteralTree value : Annotations.getAllStringsOf(annotation)) {
+                    SuppressWarningsRule.this.checkKey(file, value, findings);
                 }
 
                 return super.visitAnnotation(annotation, unused);
@@ -142,18 +145,22 @@ public class SuppressWarningsRule implements Rule {
     }
 
     ///
-    /// Gets the string literals an annotation argument holds, alone or in an array.
+    /// Records a breach if the given key is no javac lint key, no IntelliJ inspection id, and no `conventions:<id>` of
+    /// a rule of the plugin.
     ///
-    private static @Unmodifiable List<LiteralTree> valuesOf(ExpressionTree argument) {
-        return switch (argument) {
-            case AssignmentTree assignment -> SuppressWarningsRule.valuesOf(assignment.getExpression());
-            case LiteralTree literal -> List.of(literal);
-            case NewArrayTree array -> array.getInitializers()
-                    .stream()
-                    .filter(LiteralTree.class::isInstance)
-                    .map(LiteralTree.class::cast)
-                    .toList();
-            default -> List.of();
-        };
+    private void checkKey(SourceFile file, LiteralTree value, Findings findings) {
+        String key = String.valueOf(value.getValue());
+        if (key.startsWith(SuppressWarningsRule.CONVENTIONS)) {
+            String id = key.substring(SuppressWarningsRule.CONVENTIONS.length());
+            if (!this.ids.contains(id)) {
+                findings.report(SuppressWarningsRule.ID, file, value, id + " is no rule of the conventions plugin");
+            }
+
+            return;
+        }
+
+        if (!SuppressWarningsRule.LINT_KEYS.contains(key) && !SuppressWarningsRule.INSPECTION.matcher(key).matches()) {
+            findings.report(SuppressWarningsRule.ID, file, value, key + " is neither a javac lint key nor an IntelliJ inspection id");
+        }
     }
 }

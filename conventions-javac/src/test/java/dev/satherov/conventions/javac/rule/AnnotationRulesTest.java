@@ -114,6 +114,24 @@ class AnnotationRulesTest {
     }
 
     @Test
+    void suppressWarningsTakesConventionsKeysAndLowercaseIds() {
+        Javac.Report report = Javac.main("""
+                package dev.example;
+
+                @SuppressWarnings({"conventions:visibility", "unused"})
+                class Sample {
+
+                    @SuppressWarnings("conventions:no-such-rule")
+                    void run() { }
+                }
+                """);
+
+        assertThat(report.getAllOf(SuppressWarningsRule.ID))
+                .extracting(Javac.Finding::message)
+                .containsExactly("no-such-rule is no rule of the conventions plugin");
+    }
+
+    @Test
     void suppressWarningsStaysOffFieldsParametersAndLocals() {
         Javac.Report report = Javac.main("""
                 package dev.example;
