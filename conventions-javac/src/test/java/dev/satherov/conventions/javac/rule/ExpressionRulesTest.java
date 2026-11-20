@@ -3,15 +3,19 @@ package dev.satherov.conventions.javac.rule;
 import dev.satherov.conventions.javac.Javac;
 import dev.satherov.conventions.javac.rule.expression.IdentityLambdaRule;
 import dev.satherov.conventions.javac.rule.expression.LocaleRule;
+import dev.satherov.conventions.javac.rule.expression.NestedComputeRule;
 import dev.satherov.conventions.javac.rule.expression.NullTernaryRule;
 import dev.satherov.conventions.javac.rule.expression.ObjectUnderscoreRule;
 import dev.satherov.conventions.javac.rule.expression.QualificationRule;
+import dev.satherov.conventions.javac.rule.expression.UntimedConnectRule;
+import dev.satherov.conventions.javac.rule.expression.UntimedFutureRule;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledForJreRange;
 import org.junit.jupiter.api.condition.JRE;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 ///
 /// Tests the rules about expressions.
@@ -183,5 +187,261 @@ class ExpressionRulesTest {
                 """);
 
         assertThat(report.getAllLinesOf(ObjectUnderscoreRule.ID)).containsExactly(6L);
+    }
+
+    @Test
+    void nestedComputeFlagsWritesToOtherMapsAndCaches() {
+        Javac.Report report = Javac.main("""
+                package com.github.benmanes.caffeine.cache;
+
+                public interface Cache<KEY, VALUE> {
+
+                    void put(KEY key, VALUE value);
+
+                    void invalidate(KEY key);
+
+                    VALUE getIfPresent(KEY key);
+                }
+                """, """
+                package dev.example;
+
+                import com.github.benmanes.caffeine.cache.Cache;
+
+                import java.util.ArrayDeque;
+                import java.util.Deque;
+                import java.util.Map;
+                import java.util.concurrent.ConcurrentHashMap;
+
+                class Rings {
+
+                    private final Map<String, Deque<String>> rings = new ConcurrentHashMap<>();
+
+                    private final Map<String, String> owners = new ConcurrentHashMap<>();
+
+                    private final Cache<String, String> store;
+
+                    Rings(Cache<String, String> store) {
+                        this.store = store;
+                    }
+
+                    void note(String channel, String message) {
+                        this.rings.compute(channel, (key, ring) -> {
+                            Deque<String> ids = ring == null ? new ArrayDeque<>() : ring;
+                            ids.addLast(message);
+                            this.store.invalidate(ids.removeFirst());
+                            this.owners.remove(message);
+                            this.rings.remove("other");
+                            return ids;
+                        });
+                        this.owners.merge(channel, message, (left, right) -> {
+                            this.trim(right);
+                            return left;
+                        });
+                    }
+
+                    private void trim(String message) {
+                        this.store.put(message, message);
+                    }
+                }
+                """);
+
+        assertThat(report.getAllOf(NestedComputeRule.ID))
+                .extracting(Javac.Finding::file, Javac.Finding::line)
+                .containsExactly(
+                        tuple("dev/example/Rings.java", 26L),
+                        tuple("dev/example/Rings.java", 27L),
+                        tuple("dev/example/Rings.java", 32L)
+                );
+    }
+
+    @Test
+    void nestedComputeFlagsWritesToFieldsOfAnyType() {
+        Javac.Report report = Javac.main("""
+                package dev.example;
+
+                interface Store {
+
+                    void remove(String key);
+                }
+                """, """
+                package dev.example;
+
+                import java.util.ArrayDeque;
+                import java.util.Deque;
+                import java.util.Map;
+                import java.util.concurrent.ConcurrentHashMap;
+
+                class Messages {
+
+                    private final Map<String, Deque<String>> rings = new ConcurrentHashMap<>();
+
+                    private final Store store;
+
+                    Messages(Store store) {
+                        this.store = store;
+                    }
+
+                    void note(String channel, String message) {
+                        this.rings.compute(channel, (key, ring) -> {
+                            Deque<String> ids = ring == null ? new ArrayDeque<>() : ring;
+                            ids.addLast(message);
+                            while (ids.size() > 10) {
+                                this.store.remove(ids.removeFirst());
+                            }
+
+                            return ids;
+                        });
+                    }
+
+                    class Trimmer {
+
+                        void trim(String channel) {
+                            Messages.this.rings.computeIfPresent(channel, (key, ids) -> {
+                                Messages.this.store.remove(key);
+                                ids.remove(key);
+                                return ids;
+                            });
+                        }
+                    }
+                }
+                """);
+
+        assertThat(report.getAllOf(NestedComputeRule.ID))
+                .extracting(Javac.Finding::file, Javac.Finding::line)
+                .containsExactly(
+                        tuple("dev/example/Messages.java", 23L),
+                        tuple("dev/example/Messages.java", 34L)
+                );
+    }
+
+    @Test
+    void nestedComputeLeavesTheOwnValueAndOtherCallsAlone() {
+        Javac.Report report = Javac.main("""
+                package dev.example;
+
+                import java.util.HashMap;
+                import java.util.List;
+                import java.util.Map;
+                import java.util.concurrent.ConcurrentHashMap;
+
+                class Groups {
+
+                    private final Map<String, Map<String, String>> groups = new ConcurrentHashMap<>();
+
+                    private final Map<String, String> names = new ConcurrentHashMap<>();
+
+                    void add(String group, String key, List<String> log) {
+                        this.groups.computeIfAbsent(group, _key -> new HashMap<>()).put(key, key);
+                        this.groups.computeIfPresent(group, (_key, members) -> {
+                            members.put(key, key);
+                            Map<String, String> copy = new HashMap<>(members);
+                            copy.remove(key);
+                            log.remove(key);
+                            this.fill(members);
+                            return copy;
+                        });
+                        this.names.put(group, key);
+                    }
+
+                    private void fill(Map<String, String> members) {
+                        members.clear();
+                    }
+                }
+                """);
+
+        assertThat(report.getAllOf(NestedComputeRule.ID)).isEmpty();
+    }
+
+    @Test
+    void untimedFutureFlagsWaitsWithoutATimeout() {
+        Javac.Report report = Javac.main("""
+                package dev.example;
+
+                import java.util.concurrent.CompletableFuture;
+                import java.util.concurrent.ExecutionException;
+                import java.util.concurrent.ForkJoinTask;
+                import java.util.concurrent.Future;
+                import java.util.concurrent.TimeUnit;
+                import java.util.concurrent.TimeoutException;
+
+                class Waits {
+
+                    void run(CompletableFuture<String> completable, ForkJoinTask<String> task, Future<String> future) throws ExecutionException, InterruptedException, TimeoutException {
+                        completable.join();
+                        task.join();
+                        future.get();
+                        completable.get();
+                        future.get(1L, TimeUnit.SECONDS);
+                        completable.orTimeout(1L, TimeUnit.SECONDS).getNow("none");
+                        completable.isDone();
+                    }
+                }
+                """);
+
+        assertThat(report.getAllLinesOf(UntimedFutureRule.ID)).containsExactly(13L, 14L, 15L, 16L);
+    }
+
+    @Test
+    void untimedFutureIsLeftToTestCode() {
+        Javac.Report report = Javac.test("""
+                package dev.example;
+
+                import java.util.concurrent.CompletableFuture;
+
+                class WaitsTest {
+
+                    void run(CompletableFuture<String> completable) {
+                        completable.join();
+                    }
+                }
+                """);
+
+        assertThat(report.getAllOf(UntimedFutureRule.ID)).isEmpty();
+    }
+
+    @Test
+    void untimedConnectFlagsClientsWithoutAConnectTimeout() {
+        Javac.Report report = Javac.main("""
+                package dev.example;
+
+                import java.net.URI;
+                import java.net.http.HttpClient;
+                import java.net.http.WebSocket;
+                import java.time.Duration;
+
+                class Clients {
+
+                    void run(HttpClient client, WebSocket.Listener listener, URI uri) {
+                        HttpClient.newHttpClient();
+                        HttpClient.newBuilder().build();
+                        HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
+                        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1L)).build();
+                        client.newWebSocketBuilder().buildAsync(uri, listener);
+                        client.newWebSocketBuilder().connectTimeout(Duration.ofSeconds(1L)).buildAsync(uri, listener);
+                        HttpClient.Builder builder = HttpClient.newBuilder();
+                        builder.build();
+                    }
+                }
+                """);
+
+        assertThat(report.getAllLinesOf(UntimedConnectRule.ID)).containsExactly(11L, 12L, 13L, 15L);
+    }
+
+    @Test
+    void untimedConnectIsLeftToTestCode() {
+        Javac.Report report = Javac.test("""
+                package dev.example;
+
+                import java.net.http.HttpClient;
+
+                class ClientsTest {
+
+                    void run() {
+                        HttpClient.newHttpClient();
+                    }
+                }
+                """);
+
+        assertThat(report.getAllOf(UntimedConnectRule.ID)).isEmpty();
     }
 }

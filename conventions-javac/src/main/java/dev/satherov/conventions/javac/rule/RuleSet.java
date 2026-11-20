@@ -12,13 +12,17 @@ import dev.satherov.conventions.javac.rule.comment.CommentedCodeRule;
 import dev.satherov.conventions.javac.rule.comment.DocFormRule;
 import dev.satherov.conventions.javac.rule.comment.DocPresenceRule;
 import dev.satherov.conventions.javac.rule.comment.NoinspectionReasonRule;
+import dev.satherov.conventions.javac.rule.declaration.BitConstantRule;
 import dev.satherov.conventions.javac.rule.declaration.TypeParameterRule;
 import dev.satherov.conventions.javac.rule.declaration.VisibilityRule;
 import dev.satherov.conventions.javac.rule.expression.IdentityLambdaRule;
 import dev.satherov.conventions.javac.rule.expression.LocaleRule;
+import dev.satherov.conventions.javac.rule.expression.NestedComputeRule;
 import dev.satherov.conventions.javac.rule.expression.NullTernaryRule;
 import dev.satherov.conventions.javac.rule.expression.ObjectUnderscoreRule;
 import dev.satherov.conventions.javac.rule.expression.QualificationRule;
+import dev.satherov.conventions.javac.rule.expression.UntimedConnectRule;
+import dev.satherov.conventions.javac.rule.expression.UntimedFutureRule;
 import dev.satherov.conventions.javac.rule.layout.BlockSpacingRule;
 import dev.satherov.conventions.javac.rule.layout.ClassicSwitchRule;
 import dev.satherov.conventions.javac.rule.layout.EmptyBodyRule;
@@ -123,7 +127,11 @@ public record RuleSet(@Unmodifiable List<Rule> rules) {
                 new OverrideRule(trees, hierarchy),
                 new UnmodifiableRule(trees, task.getElements(), task.getTypes(), hierarchy),
                 new LocaleRule(trees),
-                new QualificationRule(trees, task.getTypes())
+                new QualificationRule(trees, task.getTypes()),
+                new BitConstantRule(trees),
+                new NestedComputeRule(trees, task.getElements(), task.getTypes()),
+                new UntimedFutureRule(trees, task.getElements(), task.getTypes()),
+                new UntimedConnectRule(trees)
         );
         Set<String> ids = Stream.concat(rules.stream().map(Rule::id), Stream.of(SuppressWarningsRule.ID))
                 .collect(Collectors.toUnmodifiableSet());

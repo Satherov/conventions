@@ -1,5 +1,5 @@
 ///
-/// The rules about declarations: their visibility and the names of their type parameters.
+/// The rules about declarations: their visibility, the names of their type parameters, and constants that hold bit flags.
 ///
 @NullMarked
 @CheckReturnValue
