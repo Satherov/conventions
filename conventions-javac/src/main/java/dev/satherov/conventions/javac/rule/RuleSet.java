@@ -21,6 +21,7 @@ import dev.satherov.conventions.javac.rule.expression.NestedComputeRule;
 import dev.satherov.conventions.javac.rule.expression.NullTernaryRule;
 import dev.satherov.conventions.javac.rule.expression.ObjectUnderscoreRule;
 import dev.satherov.conventions.javac.rule.expression.QualificationRule;
+import dev.satherov.conventions.javac.rule.expression.UntimedConnectRule;
 import dev.satherov.conventions.javac.rule.expression.UntimedFutureRule;
 import dev.satherov.conventions.javac.rule.layout.BlockSpacingRule;
 import dev.satherov.conventions.javac.rule.layout.ClassicSwitchRule;
@@ -129,7 +130,8 @@ public record RuleSet(@Unmodifiable List<Rule> rules) {
                 new QualificationRule(trees, task.getTypes()),
                 new BitConstantRule(trees),
                 new NestedComputeRule(trees, task.getElements(), task.getTypes()),
-                new UntimedFutureRule(trees, task.getElements(), task.getTypes())
+                new UntimedFutureRule(trees, task.getElements(), task.getTypes()),
+                new UntimedConnectRule(trees)
         );
         Set<String> ids = Stream.concat(rules.stream().map(Rule::id), Stream.of(SuppressWarningsRule.ID))
                 .collect(Collectors.toUnmodifiableSet());

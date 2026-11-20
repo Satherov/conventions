@@ -7,6 +7,7 @@ import dev.satherov.conventions.javac.rule.expression.NestedComputeRule;
 import dev.satherov.conventions.javac.rule.expression.NullTernaryRule;
 import dev.satherov.conventions.javac.rule.expression.ObjectUnderscoreRule;
 import dev.satherov.conventions.javac.rule.expression.QualificationRule;
+import dev.satherov.conventions.javac.rule.expression.UntimedConnectRule;
 import dev.satherov.conventions.javac.rule.expression.UntimedFutureRule;
 
 import org.junit.jupiter.api.Test;
@@ -396,5 +397,51 @@ class ExpressionRulesTest {
                 """);
 
         assertThat(report.getAllOf(UntimedFutureRule.ID)).isEmpty();
+    }
+
+    @Test
+    void untimedConnectFlagsClientsWithoutAConnectTimeout() {
+        Javac.Report report = Javac.main("""
+                package dev.example;
+
+                import java.net.URI;
+                import java.net.http.HttpClient;
+                import java.net.http.WebSocket;
+                import java.time.Duration;
+
+                class Clients {
+
+                    void run(HttpClient client, WebSocket.Listener listener, URI uri) {
+                        HttpClient.newHttpClient();
+                        HttpClient.newBuilder().build();
+                        HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
+                        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1L)).build();
+                        client.newWebSocketBuilder().buildAsync(uri, listener);
+                        client.newWebSocketBuilder().connectTimeout(Duration.ofSeconds(1L)).buildAsync(uri, listener);
+                        HttpClient.Builder builder = HttpClient.newBuilder();
+                        builder.build();
+                    }
+                }
+                """);
+
+        assertThat(report.getAllLinesOf(UntimedConnectRule.ID)).containsExactly(11L, 12L, 13L, 15L);
+    }
+
+    @Test
+    void untimedConnectIsLeftToTestCode() {
+        Javac.Report report = Javac.test("""
+                package dev.example;
+
+                import java.net.http.HttpClient;
+
+                class ClientsTest {
+
+                    void run() {
+                        HttpClient.newHttpClient();
+                    }
+                }
+                """);
+
+        assertThat(report.getAllOf(UntimedConnectRule.ID)).isEmpty();
     }
 }
