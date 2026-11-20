@@ -9,6 +9,9 @@ import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;
 ///
 /// The rules about the names of types.
 ///
+/// The rules on kind, prefix, and version names leave out a class marked `@Generated`, whose name a generator takes
+/// from its input. The mark has to stay in the class file: `javax.annotation.processing.Generated` does not.
+///
 @UtilityClass
 public class NamingRules {
 
@@ -19,6 +22,7 @@ public class NamingRules {
     @ArchTest
     public static final ArchRule NO_KIND_NAMES = ArchRuleDefinition.noClasses()
             .that(Code.MAIN)
+            .and(Code.WRITTEN)
             .should()
             .haveSimpleNameEndingWith("Manager")
             .orShould()
@@ -54,6 +58,7 @@ public class NamingRules {
     @ArchTest
     public static final ArchRule NO_ABSTRACT_PREFIX = ArchRuleDefinition.noClasses()
             .that(Code.MAIN)
+            .and(Code.WRITTEN)
             .should()
             .haveNameMatching(".*[.$](Abstract|Base)[A-Z][^.$]*")
             .allowEmptyShould(true);
@@ -65,6 +70,7 @@ public class NamingRules {
     @ArchTest
     public static final ArchRule NO_VERSION_NAMES = ArchRuleDefinition.noClasses()
             .that(Code.MAIN)
+            .and(Code.WRITTEN)
             .should()
             .haveNameMatching(".*[.$][^.$]*(New|Legacy|Enhanced|Improved|Advanced|Smart)([A-Z][^.$]*)?")
             .orShould()

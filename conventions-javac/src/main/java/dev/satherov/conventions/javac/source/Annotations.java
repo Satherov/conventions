@@ -3,11 +3,18 @@ package dev.satherov.conventions.javac.source;
 import lombok.experimental.UtilityClass;
 
 import com.sun.source.tree.AnnotationTree;
+import com.sun.source.tree.AssignmentTree;
+import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.LiteralTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.ModifiersTree;
+import com.sun.source.tree.NewArrayTree;
 import com.sun.source.tree.Tree;
 
+import org.jetbrains.annotations.Unmodifiable;
+
+import java.util.List;
 import java.util.Optional;
 
 ///
@@ -58,6 +65,36 @@ public class Annotations {
     ///
     public static boolean has(ModifiersTree modifiers, String name) {
         return Annotations.find(modifiers, name).isPresent();
+    }
+
+    ///
+    /// Gets the string literals the arguments of the given annotation hold, alone or in an array.
+    ///
+    /// @param annotation The annotation, such as a `@SuppressWarnings`.
+    ///
+    /// @return Any string literals, in the order they are written.
+    ///
+    public static @Unmodifiable List<LiteralTree> getAllStringsOf(AnnotationTree annotation) {
+        return annotation.getArguments()
+                .stream()
+                .flatMap(argument -> Annotations.stringsOf(argument).stream())
+                .toList();
+    }
+
+    ///
+    /// Gets the string literals an annotation argument holds, alone or in an array.
+    ///
+    private static @Unmodifiable List<LiteralTree> stringsOf(ExpressionTree argument) {
+        return switch (argument) {
+            case AssignmentTree assignment -> Annotations.stringsOf(assignment.getExpression());
+            case LiteralTree literal -> List.of(literal);
+            case NewArrayTree array -> array.getInitializers()
+                    .stream()
+                    .filter(LiteralTree.class::isInstance)
+                    .map(LiteralTree.class::cast)
+                    .toList();
+            default -> List.of();
+        };
     }
 
     ///

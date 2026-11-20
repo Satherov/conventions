@@ -14,7 +14,7 @@ The code conventions of Satherov's Java projects, as checks that fail the build.
 
 ```kotlin
 plugins {
-    id("dev.satherov.conventions") version "1.0.0"
+    id("dev.satherov.conventions") version "1.0.1"
 }
 
 conventions {
@@ -42,7 +42,20 @@ class ArchitectureTest {
 | `disabled`    | Ids of javac rules that do not run, as printed in `[conventions:<id>]`.                                   |
 | `generated`   | Directories of sources the project generates. Source directories below the build directory count already. |
 
-A single finding of an ArchUnit rule is excused in `archunit_ignore_patterns.txt` on the test classpath.
+## Suppression
+
+A finding of a javac rule is suppressed on the method, constructor, or type around it, with the rule's id as printed
+in `[conventions:<id>]`:
+
+```java
+@SuppressWarnings("conventions:unmodifiable")
+private Deque<Request> queue(Lane lane) {
+    return this.queues.get(lane);
+}
+```
+
+A `@SuppressWarnings` on a field, a parameter, a record component, or a local is a finding of its own. A finding of an
+ArchUnit rule is excused in `archunit_ignore_patterns.txt` on the test classpath.
 
 ## Build
 

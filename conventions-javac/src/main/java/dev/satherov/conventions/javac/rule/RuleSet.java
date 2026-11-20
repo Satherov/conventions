@@ -42,6 +42,7 @@ import org.jetbrains.annotations.Unmodifiable;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 ///
 /// The rules one compilation runs, every rule but the ones the options disable.
@@ -92,12 +93,11 @@ public record RuleSet(@Unmodifiable List<Rule> rules) {
     private static @Unmodifiable List<Rule> create(JavacTask task) {
         Trees trees = Trees.instance(task);
         Hierarchy hierarchy = new Hierarchy(task.getElements(), task.getTypes());
-        return List.of(
+        List<Rule> rules = List.of(
                 new DocFormRule(),
                 new DocPresenceRule(),
                 new NoinspectionReasonRule(),
                 new CommentedCodeRule(),
-                new SuppressWarningsRule(),
                 new InternalOnceRule(),
                 new AnnotationLineRule(),
                 new DeprecatedRule(),
@@ -125,6 +125,10 @@ public record RuleSet(@Unmodifiable List<Rule> rules) {
                 new LocaleRule(trees),
                 new QualificationRule(trees, task.getTypes())
         );
+        Set<String> ids = Stream.concat(rules.stream().map(Rule::id), Stream.of(SuppressWarningsRule.ID))
+                .collect(Collectors.toUnmodifiableSet());
+        return Stream.concat(rules.stream(), Stream.of(new SuppressWarningsRule(ids)))
+                .toList();
     }
 
     ///

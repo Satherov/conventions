@@ -10,6 +10,8 @@ import org.jetbrains.annotations.Unmodifiable;
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -74,8 +76,7 @@ final class Fixtures {
             Fixtures.compile(root.resolve("src/main"), this.main, mainOutput, System.getProperty("java.class.path"));
             Fixtures.compile(root.resolve("src/test"), this.test, testOutput, System.getProperty("java.class.path") + File.pathSeparator + mainOutput);
             JavaClasses classes = new ClassFileImporter().importPath(root.resolve("build"));
-            EvaluationResult result = rule.evaluate(classes);
-            return List.copyOf(result.getFailureReport().getDetails());
+            return Fixtures.evaluate(rule, classes, mainOutput, testOutput);
         } finally {
             Fixtures.delete(root);
         }
@@ -84,6 +85,20 @@ final class Fixtures {
     ///
     /// Writes the given sources below the given directory and compiles them into the given output.
     ///
+    private static @Unmodifiable List<String> evaluate(ArchRule rule, JavaClasses classes, Path mainOutput, Path testOutput) {
+        Thread thread = Thread.currentThread();
+        ClassLoader previous = thread.getContextClassLoader();
+        try (URLClassLoader loader = new URLClassLoader(new URL[] { mainOutput.toUri().toURL(), testOutput.toUri().toURL() }, previous)) {
+            thread.setContextClassLoader(loader);
+            EvaluationResult result = rule.evaluate(classes);
+            return List.copyOf(result.getFailureReport().getDetails());
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        } finally {
+            thread.setContextClassLoader(previous);
+        }
+    }
+
     private static void compile(Path sources, List<String> texts, Path output, String classpath) {
         if (texts.isEmpty()) {
             return;

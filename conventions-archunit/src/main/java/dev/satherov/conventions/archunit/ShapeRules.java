@@ -2,6 +2,7 @@ package dev.satherov.conventions.archunit;
 
 import lombok.experimental.UtilityClass;
 
+import com.tngtech.archunit.base.ArchUnitException;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaAccess;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -60,24 +61,27 @@ public class ShapeRules {
 
     ///
     /// A type with exactly one instance is an enum with the constant `INSTANCE`, not a class with a static
-    /// `INSTANCE` field.
+    /// `INSTANCE` field. A class that extends another class or has type parameters cannot be an enum and is left out.
     ///
     @ArchTest
     public static final ArchRule SINGLE_INSTANCE_IS_ENUM = ArchRuleDefinition.classes()
             .that(Code.MAIN)
             .and()
             .areNotEnums()
+            .and(ShapeRules.canBeEnums())
             .should(ShapeRules.holdNoInstanceField())
             .allowEmptyShould(true);
 
     ///
-    /// A type with no components is a class, never an empty record.
+    /// A type with no components is a class, never an empty record. A record that implements a sealed interface is a
+    /// bodiless case of a closed hierarchy and is left out.
     ///
     @ArchTest
     public static final ArchRule NO_EMPTY_RECORDS = ArchRuleDefinition.classes()
             .that(Code.MAIN)
             .and()
             .areRecords()
+            .and(DescribedPredicate.not(ShapeRules.areCasesOfSealedInterface()))
             .should(ShapeRules.haveComponents())
             .allowEmptyShould(true);
 
@@ -175,6 +179,37 @@ public class ShapeRules {
                 .doNotHaveModifier(JavaModifier.SYNTHETIC)
                 .should(ShapeRules.call(describer))
                 .allowEmptyShould(true);
+    }
+
+    ///
+    /// Matches the classes an enum could replace: no superclass but `Object` and no type parameters.
+    ///
+    private static DescribedPredicate<JavaClass> canBeEnums() {
+        return DescribedPredicate.describe(
+                "can be enums",
+                type -> type.getTypeParameters().isEmpty() && type.getRawSuperclass().map(superclass -> superclass.isEquivalentTo(Object.class)).orElse(true)
+        );
+    }
+
+    ///
+    /// Matches the types that implement a sealed interface directly.
+    ///
+    private static DescribedPredicate<JavaClass> areCasesOfSealedInterface() {
+        return DescribedPredicate.describe(
+                "are cases of a sealed interface",
+                type -> type.getRawInterfaces().stream().anyMatch(ShapeRules::isSealed)
+        );
+    }
+
+    ///
+    /// Checks if the given type is sealed, or `false` if it cannot be loaded to tell.
+    ///
+    private static boolean isSealed(JavaClass type) {
+        try {
+            return type.reflect().isSealed();
+        } catch (ArchUnitException.ReflectionException exception) {
+            return false;
+        }
     }
 
     ///
