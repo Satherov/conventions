@@ -7,6 +7,7 @@ import dev.satherov.conventions.javac.rule.expression.NestedComputeRule;
 import dev.satherov.conventions.javac.rule.expression.NullTernaryRule;
 import dev.satherov.conventions.javac.rule.expression.ObjectUnderscoreRule;
 import dev.satherov.conventions.javac.rule.expression.QualificationRule;
+import dev.satherov.conventions.javac.rule.expression.UntimedFutureRule;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledForJreRange;
@@ -348,5 +349,52 @@ class ExpressionRulesTest {
                 """);
 
         assertThat(report.getAllOf(NestedComputeRule.ID)).isEmpty();
+    }
+
+    @Test
+    void untimedFutureFlagsWaitsWithoutATimeout() {
+        Javac.Report report = Javac.main("""
+                package dev.example;
+
+                import java.util.concurrent.CompletableFuture;
+                import java.util.concurrent.ExecutionException;
+                import java.util.concurrent.ForkJoinTask;
+                import java.util.concurrent.Future;
+                import java.util.concurrent.TimeUnit;
+                import java.util.concurrent.TimeoutException;
+
+                class Waits {
+
+                    void run(CompletableFuture<String> completable, ForkJoinTask<String> task, Future<String> future) throws ExecutionException, InterruptedException, TimeoutException {
+                        completable.join();
+                        task.join();
+                        future.get();
+                        completable.get();
+                        future.get(1L, TimeUnit.SECONDS);
+                        completable.orTimeout(1L, TimeUnit.SECONDS).getNow("none");
+                        completable.isDone();
+                    }
+                }
+                """);
+
+        assertThat(report.getAllLinesOf(UntimedFutureRule.ID)).containsExactly(13L, 14L, 15L, 16L);
+    }
+
+    @Test
+    void untimedFutureIsLeftToTestCode() {
+        Javac.Report report = Javac.test("""
+                package dev.example;
+
+                import java.util.concurrent.CompletableFuture;
+
+                class WaitsTest {
+
+                    void run(CompletableFuture<String> completable) {
+                        completable.join();
+                    }
+                }
+                """);
+
+        assertThat(report.getAllOf(UntimedFutureRule.ID)).isEmpty();
     }
 }
