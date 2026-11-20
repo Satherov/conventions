@@ -1,6 +1,7 @@
 package dev.satherov.conventions.javac.rule;
 
 import dev.satherov.conventions.javac.Javac;
+import dev.satherov.conventions.javac.rule.declaration.BitConstantRule;
 import dev.satherov.conventions.javac.rule.declaration.TypeParameterRule;
 import dev.satherov.conventions.javac.rule.declaration.VisibilityRule;
 
@@ -112,5 +113,90 @@ class DeclarationRulesTest {
                         "type parameter T; name it with a capitalized word such as VALUE",
                         "type parameter Result; name it with a capitalized word such as VALUE"
                 );
+    }
+
+    @Test
+    void bitConstantsThatAreMaskedAreFlagged() {
+        Javac.Report report = Javac.main("""
+                package dev.example;
+
+                import java.util.Set;
+
+                class Flags {
+
+                    private static final int SILENT = 1 << 2;
+
+                    private static final long PINNED = 1L << 40;
+
+                    private static final int MUTED = 1 << 5;
+
+                    private static final int BOTH = Flags.MUTED | (1 << 3);
+
+                    private static final int SHOWN = 1 << 4;
+
+                    static int of(Set<String> names) {
+                        return names.stream()
+                                .mapToInt(name -> switch (name) {
+                                    case "silent" -> Flags.SILENT;
+                                    default -> 0;
+                                })
+                                .reduce(0, (left, right) -> left | right);
+                    }
+
+                    static boolean pinned(long bits) {
+                        return (bits & PINNED) != 0L;
+                    }
+
+                    static int both(int bits) {
+                        bits |= Flags.BOTH;
+                        return ~bits;
+                    }
+
+                    static int shown() {
+                        return Flags.SHOWN;
+                    }
+                }
+                """);
+
+        assertThat(report.getAllLinesOf(BitConstantRule.ID)).containsExactly(7L, 9L, 11L, 13L);
+    }
+
+    @Test
+    void bitConstantLeavesOtherConstantsAlone() {
+        Javac.Report report = Javac.main("""
+                package dev.example;
+
+                class Buffers {
+
+                    private static final int CAPACITY = 1 << 16;
+
+                    private static final int MASK = 0xFF;
+
+                    private static final int TWO = 2 << 3;
+
+                    private final int instance = 1 << 5;
+
+                    private static int mutable = 1 << 6;
+
+                    private static final int SUM = Buffers.CAPACITY + 1;
+
+                    enum Mode {
+                        ON;
+
+                        private static final int BIT = 1 << 1;
+
+                        int masked(int bits) {
+                            return bits & Mode.BIT;
+                        }
+                    }
+
+                    byte[] allocate(int bits) {
+                        int masked = bits & Buffers.MASK & Buffers.TWO & this.instance & Buffers.mutable & Buffers.SUM;
+                        return new byte[Buffers.CAPACITY + masked];
+                    }
+                }
+                """);
+
+        assertThat(report.getAllOf(BitConstantRule.ID)).isEmpty();
     }
 }

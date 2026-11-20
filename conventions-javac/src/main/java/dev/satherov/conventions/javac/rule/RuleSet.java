@@ -12,6 +12,7 @@ import dev.satherov.conventions.javac.rule.comment.CommentedCodeRule;
 import dev.satherov.conventions.javac.rule.comment.DocFormRule;
 import dev.satherov.conventions.javac.rule.comment.DocPresenceRule;
 import dev.satherov.conventions.javac.rule.comment.NoinspectionReasonRule;
+import dev.satherov.conventions.javac.rule.declaration.BitConstantRule;
 import dev.satherov.conventions.javac.rule.declaration.TypeParameterRule;
 import dev.satherov.conventions.javac.rule.declaration.VisibilityRule;
 import dev.satherov.conventions.javac.rule.expression.IdentityLambdaRule;
@@ -123,7 +124,8 @@ public record RuleSet(@Unmodifiable List<Rule> rules) {
                 new OverrideRule(trees, hierarchy),
                 new UnmodifiableRule(trees, task.getElements(), task.getTypes(), hierarchy),
                 new LocaleRule(trees),
-                new QualificationRule(trees, task.getTypes())
+                new QualificationRule(trees, task.getTypes()),
+                new BitConstantRule(trees)
         );
         Set<String> ids = Stream.concat(rules.stream().map(Rule::id), Stream.of(SuppressWarningsRule.ID))
                 .collect(Collectors.toUnmodifiableSet());
