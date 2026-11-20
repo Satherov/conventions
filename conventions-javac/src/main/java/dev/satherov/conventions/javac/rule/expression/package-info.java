@@ -1,5 +1,6 @@
 ///
-/// The rules about expressions: qualified member references, locales, and the idioms some calls are written with.
+/// The rules about expressions: qualified member references, locales, the idioms some calls are written with, and the
+/// calls that can wait forever or deadlock.
 ///
 @NullMarked
 @CheckReturnValue

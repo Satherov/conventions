@@ -17,6 +17,7 @@ import dev.satherov.conventions.javac.rule.declaration.TypeParameterRule;
 import dev.satherov.conventions.javac.rule.declaration.VisibilityRule;
 import dev.satherov.conventions.javac.rule.expression.IdentityLambdaRule;
 import dev.satherov.conventions.javac.rule.expression.LocaleRule;
+import dev.satherov.conventions.javac.rule.expression.NestedComputeRule;
 import dev.satherov.conventions.javac.rule.expression.NullTernaryRule;
 import dev.satherov.conventions.javac.rule.expression.ObjectUnderscoreRule;
 import dev.satherov.conventions.javac.rule.expression.QualificationRule;
@@ -125,7 +126,8 @@ public record RuleSet(@Unmodifiable List<Rule> rules) {
                 new UnmodifiableRule(trees, task.getElements(), task.getTypes(), hierarchy),
                 new LocaleRule(trees),
                 new QualificationRule(trees, task.getTypes()),
-                new BitConstantRule(trees)
+                new BitConstantRule(trees),
+                new NestedComputeRule(trees, task.getElements(), task.getTypes())
         );
         Set<String> ids = Stream.concat(rules.stream().map(Rule::id), Stream.of(SuppressWarningsRule.ID))
                 .collect(Collectors.toUnmodifiableSet());
